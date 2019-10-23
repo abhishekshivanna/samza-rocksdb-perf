@@ -1,0 +1,26 @@
+.classpath
+.gradle
+.idea
+.idea_modules
+.project
+.settings
+bin
+build
+config/external/
+out
+state
+*.iml
+*.ipr
+*.iws
+ligradle
+/*/*/identity.cert
+/*/*/identity.p12
+/*/*/identity.key
+/*/*/caches
+
+
+
+# Added by mp-maker
+/*/build
+/*/config
+/*/i18n
