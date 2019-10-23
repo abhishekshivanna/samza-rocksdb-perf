@@ -1,2 +1,12 @@
-rootProject.name = 'rocksdb-perf-benchmark'
+def modules = ['samza-yarn-jobs']
 
+modules.each { module ->
+  if (!file(module).directory) {
+    throw new GradleException("Module '$module' specified in the settings.gradle file must be a valid directory in the root project.")
+  }
+  file(module).eachDir { submodule ->
+    if (!submodule.name.startsWith('.')) {
+      include "${module}:${submodule.name}"
+    }
+  }
+}

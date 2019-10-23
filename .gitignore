@@ -17,10 +17,7 @@ ligradle
 /*/*/identity.p12
 /*/*/identity.key
 /*/*/caches
-
-
-
-# Added by mp-maker
 /*/build
 /*/config
 /*/i18n
+**/dist
