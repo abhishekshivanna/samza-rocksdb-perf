@@ -1,4 +1,4 @@
-package org.apache.samza.perf.event;
+package org.apache.samza.perf.serialization;
 
 import org.codehaus.jackson.annotate.JsonCreator;
 import org.codehaus.jackson.annotate.JsonProperty;

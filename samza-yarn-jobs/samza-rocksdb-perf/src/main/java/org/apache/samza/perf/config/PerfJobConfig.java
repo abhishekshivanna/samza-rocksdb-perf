@@ -6,6 +6,55 @@ import org.apache.samza.config.MapConfig;
 
 
 public class PerfJobConfig extends MapConfig {
+
+  private static final String PERF_JOB_STORE_KEY_SIZE_BYTES = "perf.job.store.key.size.bytes";
+  private static final int DEFAULT_STORE_KEY_SIZE_BYTES = 20;
+
+  private static final String PERF_JOB_STORE_VALUE_SIZE_BYTES = "perf.job.store.value.size.bytes";
+  private static final int DEFAULT_STORE_VALUE_SIZE_BYTES = 1000;
+
+  private static final String STORE_NAME = "perf.job.store.name";
+  private static final String DEFAULT_STORE_NAME = "perf-test-store";
+
+  private static final String KAFKA_BOOSTRAP_SERVERS_KEY = "perf.job.kafka.bootstrap.servers";
+  private static final ImmutableList<String> DEFAULT_KAFKA_BOOSTRAP_SERVERS_KEY = ImmutableList.of("localhost:9092");
+
+  private static final String CONSUMER_ZK_CONNECT_KEY = "perf.job.kafka.consumer.zk.connect";
+  private static final ImmutableList<String> DEFAULT_CONSUMER_ZK_CONNECT_KEY = ImmutableList.of("localhost:2181");
+
+  private static final String PERF_JOB_TASK_STORE_SIZE_MB = "perf.job.task.store.size.mb";
+  private static final int DEFAULT_TASK_STORE_SIZE_MB = 5;
+
+  private static final String PERF_JOB_STORE_GET_RATIO = "perf.job.store.get.ratio";
+  private static final double DEFAULT_PERF_JOB_STORE_GET_RATIO = 0.8;
+
+  private static final String PERF_JOB_STORE_PUT_RATIO = "perf.job.store.put.ratio";
+  private static final double DEFAULT_PERF_JOB_STORE_PUT_RATIO = 0.1;
+
+  private static final String PERF_JOB_STORE_DELETE_RATIO = "perf.job.store.delete.ratio";
+  private static final double DEFAULT_PERF_JOB_STORE_DELETE_RATIO = 0.0;
+
+  private static final String PERF_JOB_STORE_ALL_RANGE_SCAN_RATIO = "perf.job.store.all.range.scan.ratio";
+  private static final double DEFAULT_PERF_JOB_STORE_ALL_RANGE_SCAN_RATIO = 0.0;
+
+  private static final String PERF_JOB_STORE_SNAPSHOT_RATIO = "perf.job.store.snapshot.ratio";
+  private static final double DEFAULT_PERF_JOB_STORE_SNAPSHOT_RATIO = 0.0;
+
+  private static final String PERF_JOB_STORE_RANGE_SCAN_RATIO = "perf.job.store.range.scan.ratio";
+  private static final double DEFAULT_PERF_JOB_STORE_RANGE_SCAN_RATIO = 0.0;
+
+  private static final String PERF_JOB_KEYSPACE_BUCKETS = "perf.job.keyspace.buckets";
+  private static final int DEFAULT_PERF_JOB_KEYSPACE_BUCKETS = 10;
+
+  private static final String TASK_WINDOW_MS = "task.window.ms";
+  private static final int DEFAULT_TASK_WINDOW_MS = 1000;
+
+  private static final String JOB_CONTAINER_THREAD_POOL_SIZE = "job.container.thread.pool.size";
+  private static final int DEFAULT_JOB_CONTAINER_THREAD_POOL_SIZE = 1;
+
+  private static final String PERF_JOB_BOOTSTRAP_BATCH_SIZE = "perf.job.bootstrap.batch.size";
+  private static final int DEFAULT_PERF_JOB_BOOTSTRAP_BATCH_SIZE = 1;
+
   private MapConfig config;
 
   public PerfJobConfig(MapConfig config) {
@@ -13,12 +62,66 @@ public class PerfJobConfig extends MapConfig {
   }
 
   public List<String> getKafkaBootstrapServers() {
-    final String KAFKA_BOOSTRAP_SERVERS_KEY = "custom.kafka.bootstrap.servers";
-    return config.getList(KAFKA_BOOSTRAP_SERVERS_KEY, ImmutableList.of(""));
+    return config.getList(KAFKA_BOOSTRAP_SERVERS_KEY, DEFAULT_KAFKA_BOOSTRAP_SERVERS_KEY);
   }
 
   public List<String> getConsumerZkConnect() {
-    final String CONSUMER_ZK_CONNECT_KEY = "custom.kafka.consumer.zk.connect";
-    return config.getList(CONSUMER_ZK_CONNECT_KEY, ImmutableList.of(""));
+    return config.getList(CONSUMER_ZK_CONNECT_KEY, DEFAULT_CONSUMER_ZK_CONNECT_KEY);
+  }
+
+  public String getStoreName() {
+    return config.get(STORE_NAME, DEFAULT_STORE_NAME);
+  }
+
+  public int getStoreKeySizeBytes() {
+    return config.getInt(PERF_JOB_STORE_KEY_SIZE_BYTES, DEFAULT_STORE_KEY_SIZE_BYTES);
+  }
+
+  public long getPerTaskStoreSizeMb() {
+    return config.getInt(PERF_JOB_TASK_STORE_SIZE_MB, DEFAULT_TASK_STORE_SIZE_MB);
+  }
+
+  public int getStoreValueSizeBytes() {
+    return config.getInt(PERF_JOB_STORE_VALUE_SIZE_BYTES, DEFAULT_STORE_VALUE_SIZE_BYTES);
+  }
+
+  public double getGetRatio() {
+    return config.getDouble(PERF_JOB_STORE_GET_RATIO, DEFAULT_PERF_JOB_STORE_GET_RATIO);
+  }
+
+  public double getPutRatio() {
+    return config.getDouble(PERF_JOB_STORE_PUT_RATIO, DEFAULT_PERF_JOB_STORE_PUT_RATIO);
+  }
+
+  public double getDeleteRatio() {
+    return config.getDouble(PERF_JOB_STORE_DELETE_RATIO, DEFAULT_PERF_JOB_STORE_DELETE_RATIO);
+  }
+
+  public double getAllKeysScanRatio() {
+    return config.getDouble(PERF_JOB_STORE_ALL_RANGE_SCAN_RATIO, DEFAULT_PERF_JOB_STORE_ALL_RANGE_SCAN_RATIO);
+  }
+
+  public double getSnapshotRatio() {
+    return config.getDouble(PERF_JOB_STORE_SNAPSHOT_RATIO, DEFAULT_PERF_JOB_STORE_SNAPSHOT_RATIO);
+  }
+
+  public double getRangeScanRatio() {
+    return config.getDouble(PERF_JOB_STORE_RANGE_SCAN_RATIO, DEFAULT_PERF_JOB_STORE_RANGE_SCAN_RATIO);
+  }
+
+  public int getKeySpaceBuckets() {
+    return config.getInt(PERF_JOB_KEYSPACE_BUCKETS, DEFAULT_PERF_JOB_KEYSPACE_BUCKETS);
+  }
+
+  public long getWindowMs() {
+    return config.getLong(TASK_WINDOW_MS, DEFAULT_TASK_WINDOW_MS);
+  }
+
+  public int getContainerThreadpoolCount() {
+    return config.getInt(JOB_CONTAINER_THREAD_POOL_SIZE, DEFAULT_JOB_CONTAINER_THREAD_POOL_SIZE);
+  }
+
+  public int getBootstrapBatchSize() {
+    return config.getInt(PERF_JOB_BOOTSTRAP_BATCH_SIZE, DEFAULT_PERF_JOB_BOOTSTRAP_BATCH_SIZE);
   }
 }

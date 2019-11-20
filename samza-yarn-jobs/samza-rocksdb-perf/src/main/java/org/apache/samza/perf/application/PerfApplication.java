@@ -5,13 +5,16 @@ import java.util.Map;
 import org.apache.samza.application.TaskApplication;
 import org.apache.samza.application.descriptors.TaskApplicationDescriptor;
 import org.apache.samza.config.MapConfig;
-import org.apache.samza.perf.event.TestEvent;
 import org.apache.samza.perf.config.PerfJobConfig;
-import org.apache.samza.perf.factory.TestTaskFactory;
-import org.apache.samza.serializers.JsonSerdeV2;
+import org.apache.samza.perf.serialization.PaddedStringSerde;
+import org.apache.samza.serializers.KVSerde;
+import org.apache.samza.serializers.NoOpSerde;
+import org.apache.samza.serializers.StringSerde;
+import org.apache.samza.storage.kv.descriptors.RocksDbTableDescriptor;
 import org.apache.samza.system.kafka.descriptors.KafkaInputDescriptor;
 import org.apache.samza.system.kafka.descriptors.KafkaOutputDescriptor;
 import org.apache.samza.system.kafka.descriptors.KafkaSystemDescriptor;
+import org.apache.samza.task.StreamTaskFactory;
 
 
 public class PerfApplication implements TaskApplication {
@@ -27,6 +30,7 @@ public class PerfApplication implements TaskApplication {
   @Override
   public void describe(TaskApplicationDescriptor appDescriptor) {
     config = new PerfJobConfig(new MapConfig(appDescriptor.getConfig()));
+    int keySizeBytes = config.getStoreKeySizeBytes();
 
     KafkaSystemDescriptor kafkaSystemDescriptor = new KafkaSystemDescriptor(KAFKA_SYSTEM_NAME);
     kafkaSystemDescriptor.withProducerBootstrapServers(config.getKafkaBootstrapServers());
@@ -34,13 +38,17 @@ public class PerfApplication implements TaskApplication {
     kafkaSystemDescriptor.withDefaultStreamConfigs(KAFKA_DEFAULT_STREAM_CONFIGS);
 
     KafkaInputDescriptor inputDescriptor =
-        kafkaSystemDescriptor.getInputDescriptor(INPUT_STREAM_ID, new JsonSerdeV2<>(TestEvent.class));
+        kafkaSystemDescriptor.getInputDescriptor(INPUT_STREAM_ID, new NoOpSerde<>());
     KafkaOutputDescriptor outputDescriptor =
-        kafkaSystemDescriptor.getOutputDescriptor(OUTPUT_STREAM_ID, new JsonSerdeV2<>(TestEvent.class));
+        kafkaSystemDescriptor.getOutputDescriptor(OUTPUT_STREAM_ID, new NoOpSerde<>());
 
-    appDescriptor.withDefaultSystem(kafkaSystemDescriptor);
-    appDescriptor.withInputStream(inputDescriptor);
-    appDescriptor.withOutputStream(outputDescriptor);
-    appDescriptor.withTaskFactory(new TestTaskFactory());
+    RocksDbTableDescriptor<String, String> rocksDbTableDescriptor =
+        new RocksDbTableDescriptor<>(config.getStoreName(), KVSerde.of(new PaddedStringSerde(keySizeBytes), new StringSerde()));
+
+    appDescriptor.withDefaultSystem(kafkaSystemDescriptor)
+        .withInputStream(inputDescriptor)
+        .withOutputStream(outputDescriptor)
+        .withTable(rocksDbTableDescriptor)
+        .withTaskFactory((StreamTaskFactory) PerfTask::new);
   }
 }

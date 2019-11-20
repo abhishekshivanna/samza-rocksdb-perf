@@ -72,6 +72,7 @@ dependencies {
 
   compile("org.slf4j:slf4j-api:$slf4j_version")
   compile("org.slf4j:slf4j-log4j12:$slf4j_version")
+  compile("com.google.guava:guava:23.0")
 
   shell (group: 'org.apache.samza', name: 'samza-shell',  ext: 'tgz', classifier: 'dist', version: "$samza_version")
 
