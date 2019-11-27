@@ -68,7 +68,6 @@ dependencies {
   compile("org.apache.samza:samza-kv_2.11:$samza_version")
   compile("org.apache.samza:samza-kafka_2.11:$samza_version")
   compile("org.apache.samza:samza-kv-rocksdb_2.11:$samza_version")
-  compile("org.apache.samza:samza-kv-rocksdb_2.11:$samza_version")
 
   compile("org.slf4j:slf4j-api:$slf4j_version")
   compile("org.slf4j:slf4j-log4j12:$slf4j_version")

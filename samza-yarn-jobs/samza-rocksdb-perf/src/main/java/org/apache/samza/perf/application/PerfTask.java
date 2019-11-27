@@ -4,6 +4,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Range;
 import com.google.common.collect.TreeRangeMap;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.BitSet;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
@@ -33,62 +35,79 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
 
   private PerfJobConfig jobConfig;
   private static final Logger LOG = LoggerFactory.getLogger(PerfTask.class);
-  private static final Double LOG_CADENCE = 0.2;
-  private static final Random RANDOM = new Random(87324324);
+  private static final double LOG_CADENCE = 0.2;
+
+  private static final Random RANDOM = new Random(123456);
 
   private int itemsToBootstrapPerPartition;
   private int itemsBootstrapped;
   private int itemsDeleted;
   private int valueSizeBytes;
-  private int numKeyBuckets;
+  private long percentileComputeWindowSeconds;
   private KeyValueStore<String, String> store;
   private String taskName;
   private boolean done;
   private long perTaskWindowMs;
   private int numTasks;
   private int bootstrapBatchSize;
+  private long nextPctComputeTimeMs;
   @SuppressWarnings("UnstableApiUsage")
   private TreeRangeMap<Double, StoreOperation> operationRangeMap;
+  private StoreOperationManager storeOperationManager;
+  private BitSet insertedSet;
+  private BitSet deletedSet;
 
   @Override
   public void init(Context context) throws Exception {
     jobConfig = new PerfJobConfig(new MapConfig(context.getJobContext().getConfig()));
-
+    storeOperationManager = new StoreOperationManager(context);
     operationRangeMap = getStoreOperationRangeMap();
+    percentileComputeWindowSeconds = jobConfig.getPercentileMetricsComputeWindowSeconds();
     bootstrapBatchSize = jobConfig.getBootstrapBatchSize();
-    numKeyBuckets = jobConfig.getKeySpaceBuckets();
     valueSizeBytes = jobConfig.getStoreValueSizeBytes();
     taskName = context.getTaskContext().getTaskModel().getTaskName().getTaskName();
     numTasks = context.getContainerContext().getContainerModel().getTasks().entrySet().size();
+    nextPctComputeTimeMs = System.currentTimeMillis();
 
-    long storeSizeBytes = jobConfig.getPerTaskStoreSizeMb() * 1000000L;
-    itemsToBootstrapPerPartition = new Long(storeSizeBytes / valueSizeBytes).intValue();
+    long storeSizeBytes = jobConfig.getPerTaskStoreSizeMb() * 1024L * 1024L;
+    int keySizeBytes = jobConfig.getStoreKeySizeBytes();
+    itemsToBootstrapPerPartition = new Long(storeSizeBytes / (valueSizeBytes + keySizeBytes)).intValue();
     itemsBootstrapped = 0;
     itemsDeleted = 0;
     store = (KeyValueStore<String, String>) context.getTaskContext().getStore(jobConfig.getStoreName());
     done = false;
     perTaskWindowMs = getPerTaskWindowExecutionDurationMs();
 
+    insertedSet = new BitSet();
+    deletedSet = new BitSet();
+
     LOG.info("Initialized PerfTask.");
+    LOG.info(
+        "Task[{}] will bootstrap {} records [keySize: {}, valueSize: {}] into the store before performing workload",
+        taskName, itemsToBootstrapPerPartition, keySizeBytes, valueSizeBytes);
   }
 
   @SuppressWarnings("UnstableApiUsage")
   private TreeRangeMap<Double, StoreOperation> getStoreOperationRangeMap() {
     TreeRangeMap<Double, StoreOperation> operationRangeMap = TreeRangeMap.create();
     double getRatio = jobConfig.getGetRatio();
-    double putRatio = jobConfig.getPutRatio();
+    double insertRatio = jobConfig.getInsertRatio();
+    double updateRatio = jobConfig.getUpdateRatio();
     double deleteRatio = jobConfig.getDeleteRatio();
     double allKeysScanRatio = jobConfig.getAllKeysScanRatio();
     double snapshotRatio = jobConfig.getSnapshotRatio();
     double rangeRatio = jobConfig.getRangeScanRatio();
     Preconditions.checkArgument(
-        getRatio + putRatio + deleteRatio + allKeysScanRatio + snapshotRatio + rangeRatio == 1.0,
-        "Fractions of workload for each store operation must sum to 1.0. But was: " + (getRatio + putRatio + deleteRatio
-            + allKeysScanRatio + snapshotRatio + rangeRatio));
+        getRatio + insertRatio + updateRatio + deleteRatio + allKeysScanRatio + snapshotRatio + rangeRatio == 1.0,
+        "Fractions of workload for each store operation must sum to 1.0. But was: " + (getRatio + insertRatio
+            + updateRatio + deleteRatio + allKeysScanRatio + snapshotRatio + rangeRatio));
 
     Range<Double> getRange = Range.openClosed(0D, getRatio);
-    Range<Double> putRange = Range.openClosed(getRange.upperEndpoint(), getRange.upperEndpoint() + putRatio);
-    Range<Double> deleteRange = Range.openClosed(putRange.upperEndpoint(), putRange.upperEndpoint() + deleteRatio);
+    Range<Double> insertRange = Range.openClosed(getRange.upperEndpoint(), getRange.upperEndpoint() + insertRatio);
+    Range<Double> updateRange =
+        Range.openClosed(insertRange.upperEndpoint(), insertRange.upperEndpoint() + updateRatio);
+    Range<Double> deleteRange =
+        Range.openClosed(updateRange.upperEndpoint(), updateRange.upperEndpoint() + deleteRatio);
     Range<Double> allRange =
         Range.openClosed(deleteRange.upperEndpoint(), deleteRange.upperEndpoint() + allKeysScanRatio);
     Range<Double> snapshotRange = Range.openClosed(allRange.upperEndpoint(), allRange.upperEndpoint() + snapshotRatio);
@@ -96,7 +115,8 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
         Range.openClosed(snapshotRange.upperEndpoint(), snapshotRange.upperEndpoint() + rangeRatio);
 
     operationRangeMap.put(getRange, GET);
-    operationRangeMap.put(putRange, PUT);
+    operationRangeMap.put(insertRange, INSERT);
+    operationRangeMap.put(updateRange, UPDATE);
     operationRangeMap.put(deleteRange, DELETE);
     operationRangeMap.put(allRange, ALL);
     operationRangeMap.put(snapshotRange, SNAPSHOT);
@@ -114,13 +134,11 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
 
   @Override
   public void window(MessageCollector collector, TaskCoordinator coordinator) throws Exception {
-    LOG.info("from " + taskName);
-    long startTime = System.currentTimeMillis();
     if (done) {
       return;
     }
-
     // iterate until at least perTaskWindowMs has elapsed
+    long startTime = System.currentTimeMillis();
     while (System.currentTimeMillis() - startTime <= perTaskWindowMs) {
       if (itemsBootstrapped < itemsToBootstrapPerPartition) {
         performBootstrap();
@@ -132,14 +150,17 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
           case GET:
             performGet();
             break;
-          case PUT:
-            performPut();
+          case INSERT:
+            performInsert();
+            break;
+          case UPDATE:
+            performUpdate();
             break;
           case DELETE:
             performDelete();
             break;
           case ALL:
-            performFullRangeScan();
+            performAll();
             break;
           case RANGE:
             performRangeScan();
@@ -151,12 +172,15 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
             throw new IllegalStateException("Unexpected value: " + random);
         }
       }
-
       if (storeIsEmpty()) {
         LOG.info("{} store now empty; task will idle", taskName);
         done = true;
         break;
       }
+    }
+    if (nextPctComputeTimeMs <= startTime) { // cheaper to compare with startTime instead of System.currentTimeMillis()
+      storeOperationManager.computePercentileMetrics();
+      nextPctComputeTimeMs += Duration.ofSeconds(percentileComputeWindowSeconds).toMillis();
     }
   }
 
@@ -164,100 +188,127 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
     return itemsDeleted == itemsBootstrapped;
   }
 
+  private void performBootstrap() {
+    if (itemsBootstrapped == 0) {
+      LOG.info("Starting RocksDB bootstrap");
+      storeOperationManager.recordBootstrapStartTime();
+    }
+    if (bootstrapBatchSize == 1) {
+      String randomValue = generateRandomString(valueSizeBytes);
+      insertedSet.set(itemsBootstrapped);
+      storeOperationManager.timedPut(() -> store.put(Long.toString(itemsBootstrapped), randomValue));
+    } else {
+      List<Entry<String, String>> entries =
+          IntStream.range(itemsBootstrapped, itemsBootstrapped + bootstrapBatchSize).boxed().map(i -> {
+            insertedSet.set(i);
+            return new Entry<>(Long.toString(i), generateRandomString(valueSizeBytes));
+          }).collect(Collectors.toList());
+
+      storeOperationManager.timedPut(() -> store.putAll(entries));
+    }
+    itemsBootstrapped += bootstrapBatchSize;
+    storeOperationManager.incBootstrappedRecords(bootstrapBatchSize);
+    if (itemsBootstrapped >= itemsToBootstrapPerPartition) {
+      storeOperationManager.recordBootstrapEndTime();
+      LOG.info("Bootstrap done");
+    }
+    if (shouldLog(itemsBootstrapped)) {
+      LOG.info("{} records inserted in {}", itemsBootstrapped, taskName);
+    }
+  }
+
+  private void performGet() {
+    String keyToGet = Integer.toString(pickKeyInTable());
+    storeOperationManager.timedGet(() -> store.get(keyToGet));
+  }
+
+  private void performInsert() {
+    int key = pickKeyNotInTable();
+    if (key == -1) {
+      // if nothing new to insert perform Update
+      performUpdate();
+      return;
+    }
+    String randomValue = generateRandomString(valueSizeBytes);
+    storeOperationManager.timedPut(() -> store.put(Integer.toString(key), randomValue));
+    deletedSet.clear(key);
+    insertedSet.set(key);
+  }
+
+  private void performUpdate() {
+    int key = pickKeyInTable();
+    String randomValue = generateRandomString(valueSizeBytes);
+    storeOperationManager.timedPut(() -> store.put(Integer.toString(key), randomValue));
+    deletedSet.clear(key);
+    insertedSet.set(key);
+  }
+
   private void performRangeScan() {
     Pair<String, String> pair = pickRandomFromTo();
-    KeyValueIterator<String, String> rangeIterator = store.range(pair.getLeft(), pair.getRight());
-    iterateAndClose(rangeIterator);
+    storeOperationManager.timedRangeScan(() -> {
+      KeyValueIterator<String, String> rangeIterator = store.range(pair.getLeft(), pair.getRight());
+      iterateAndClose(rangeIterator);
+    });
   }
 
   private void performSnapshot() {
     Pair<String, String> pair = pickRandomFromTo();
-    KeyValueSnapshot<String, String> snapshot = store.snapshot(pair.getLeft(), pair.getRight());
-    iterateAndClose(snapshot.iterator());
-    snapshot.close();
+    storeOperationManager.timedSnapshot(() -> {
+      KeyValueSnapshot<String, String> snapshot = store.snapshot(pair.getLeft(), pair.getRight());
+      iterateAndClose(snapshot.iterator());
+      snapshot.close();
+    });
   }
 
-  private void performFullRangeScan() {
-    KeyValueIterator<String, String> allIterator = store.all();
-    iterateAndClose(allIterator);
+  private void performAll() {
+    storeOperationManager.timedAll(() -> {
+      KeyValueIterator<String, String> allIterator = store.all();
+      iterateAndClose(allIterator);
+    });
   }
 
   private void performDelete() {
-    String keyToDelete = pickKeyToDelete();
-    store.delete(keyToDelete);
+    int key = pickKeyInTable();
+    storeOperationManager.timedDelete(() -> store.delete(Integer.toString(key)));
+    deletedSet.set(key);
+    insertedSet.clear(key);
     itemsDeleted++;
     if (shouldLog(itemsDeleted)) {
       LOG.info("{} records deleted from partition {}", itemsDeleted, taskName);
     }
   }
 
-  private void performPut() {
-    String keyToOverwrite = pickRandomKeyInTable();
-    store.put(keyToOverwrite, generateRandomString(valueSizeBytes));
-  }
-
-  private void performGet() {
-    String keyToGet = pickRandomKeyInTable();
-    store.get(keyToGet);
-  }
-
-  private void performBootstrap() {
-    if (bootstrapBatchSize == 1) {
-      store.put(Long.toString(itemsBootstrapped), generateRandomString(valueSizeBytes));
-    } else {
-      List<Entry<String, String>> entries = IntStream.range(itemsBootstrapped, itemsBootstrapped + bootstrapBatchSize)
-          .boxed()
-          .map(i -> new Entry<>(Long.toString(i), generateRandomString(valueSizeBytes)))
-          .collect(Collectors.toList());
-      store.putAll(entries);
+  private int pickKeyNotInTable() {
+    int index = 0;
+    int selected = 0;
+    if (deletedSet.cardinality() == 0) {
+      return -1;
     }
-    itemsBootstrapped += bootstrapBatchSize;
-    if (shouldLog(itemsBootstrapped)) {
-      LOG.info("{} records inserted in {}", itemsBootstrapped, taskName);
+    do {
+      index = RANDOM.nextInt(itemsBootstrapped);
+      selected = deletedSet.nextSetBit(index);
+    } while (selected == -1);
+    return selected;
+  }
+
+  private int pickKeyInTable() {
+    int selected;
+    int index;
+    if (insertedSet.cardinality() == 0) {
+      return -1;
     }
-  }
-
-  /**
-   * Selects a random key that exists in the table. This is computed by first randomly selecting a non-empty bucket,
-   * and then selecting a non-deleted key in that bucket.
-   */
-  private String pickRandomKeyInTable() {
-    int emptyBuckets = Math.max(0, itemsDeleted - (itemsToBootstrapPerPartition - numKeyBuckets));
-    int selectedBucket = RANDOM.nextInt(numKeyBuckets - emptyBuckets) + emptyBuckets;
-    int numDeletedFromBucket =
-        selectedBucket < getNextDeletionBucket() ? getNextDeletionIndex() + 1 : getNextDeletionIndex();
-    int selectedIndex = RANDOM.nextInt(getBucketSize() - numDeletedFromBucket) + numDeletedFromBucket;
-    int selectedKey = selectedBucket * getBucketSize() + selectedIndex;
-
-    return Integer.toString(selectedKey);
-  }
-
-  /**
-   * Selects the next key that exists to delete from the table.
-   *
-   * Key selection is designed to round robin across buckets, to simulate more random rather than sequential deletes.
-   * With a key space of 50 divided into 5 buckets, keys would be generated in the following order:
-   *
-   * 0, 10, 20, 30, 40,
-   * 1, 11, 21, 31, 41,
-   * ...
-   * 9, 19, 29, 39, 49
-   *
-   * Where each column above represents a bucket of keys.
-   */
-  private String pickKeyToDelete() {
-    int bucketToDeleteFrom = getNextDeletionBucket();
-    int indexToDelete = getNextDeletionIndex();
-    int keyToDelete = bucketToDeleteFrom * getBucketSize() + indexToDelete;
-
-    return Long.toString(keyToDelete);
+    do {
+      index = RANDOM.nextInt(itemsBootstrapped);
+      selected = insertedSet.nextSetBit(index);
+    } while (selected == -1);
+    return selected;
   }
 
   /**
    * Returns whether to log for the given record.
    */
   private boolean shouldLog(int recordNum) {
-    return recordNum % (itemsToBootstrapPerPartition * LOG_CADENCE) == 0;
+    return Math.floor(recordNum % (itemsToBootstrapPerPartition * LOG_CADENCE)) == 0;
   }
 
   /**
@@ -294,35 +345,18 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
     iter.close();
   }
 
-  /**
-   * The bucket to be deleted from next.
-   */
-  private int getNextDeletionBucket() {
-    return itemsDeleted % numKeyBuckets;
-  }
-
-  /**
-   * The next index (in the next bucket) to delete.
-   */
-  private int getNextDeletionIndex() {
-    return itemsDeleted / numKeyBuckets;
-  }
-
-  /**
-   * The number of keys in each bucket.
-   */
-  private int getBucketSize() {
-    return itemsToBootstrapPerPartition / numKeyBuckets;
-  }
-
   /*
    * Total time each tasks should execute during a window
    * in order to prevent other tasks from starvation
    * */
-  private int getPerTaskWindowExecutionDurationMs() {
+  private long getPerTaskWindowExecutionDurationMs() {
     int threadpoolCount = jobConfig.getContainerThreadpoolCount();
     if (threadpoolCount == 1) {
-      return (int) (jobConfig.getWindowMs() / numTasks);
+      if (jobConfig.getWindowMs() % numTasks == 0) {
+        int bufferTimeBetweenWindowMs = 3;
+        return (jobConfig.getWindowMs() / numTasks) - bufferTimeBetweenWindowMs;
+      }
+      return jobConfig.getWindowMs() / numTasks;
     } else {
       return (int) (jobConfig.getWindowMs() / Math.ceil((double) numTasks / (double) threadpoolCount));
     }

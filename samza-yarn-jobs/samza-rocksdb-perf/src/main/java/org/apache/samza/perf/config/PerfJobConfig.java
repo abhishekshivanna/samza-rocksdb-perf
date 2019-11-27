@@ -1,6 +1,7 @@
 package org.apache.samza.perf.config;
 
 import com.google.common.collect.ImmutableList;
+import java.time.Duration;
 import java.util.List;
 import org.apache.samza.config.MapConfig;
 
@@ -26,10 +27,13 @@ public class PerfJobConfig extends MapConfig {
   private static final int DEFAULT_TASK_STORE_SIZE_MB = 5;
 
   private static final String PERF_JOB_STORE_GET_RATIO = "perf.job.store.get.ratio";
-  private static final double DEFAULT_PERF_JOB_STORE_GET_RATIO = 0.8;
+  private static final double DEFAULT_PERF_JOB_STORE_GET_RATIO = 0.75;
 
-  private static final String PERF_JOB_STORE_PUT_RATIO = "perf.job.store.put.ratio";
-  private static final double DEFAULT_PERF_JOB_STORE_PUT_RATIO = 0.1;
+  private static final String PERF_JOB_STORE_INSERT_RATIO = "perf.job.store.insert.ratio";
+  private static final double DEFAULT_PERF_JOB_STORE_INSERT_RATIO = 0.0;
+
+  private static final String PERF_JOB_STORE_UPDATE_RATIO = "perf.job.store.update.ratio";
+  private static final double DEFAULT_PERF_JOB_STORE_UPDATE_RATIO = 0.25;
 
   private static final String PERF_JOB_STORE_DELETE_RATIO = "perf.job.store.delete.ratio";
   private static final double DEFAULT_PERF_JOB_STORE_DELETE_RATIO = 0.0;
@@ -43,9 +47,6 @@ public class PerfJobConfig extends MapConfig {
   private static final String PERF_JOB_STORE_RANGE_SCAN_RATIO = "perf.job.store.range.scan.ratio";
   private static final double DEFAULT_PERF_JOB_STORE_RANGE_SCAN_RATIO = 0.0;
 
-  private static final String PERF_JOB_KEYSPACE_BUCKETS = "perf.job.keyspace.buckets";
-  private static final int DEFAULT_PERF_JOB_KEYSPACE_BUCKETS = 10;
-
   private static final String TASK_WINDOW_MS = "task.window.ms";
   private static final int DEFAULT_TASK_WINDOW_MS = 1000;
 
@@ -54,6 +55,17 @@ public class PerfJobConfig extends MapConfig {
 
   private static final String PERF_JOB_BOOTSTRAP_BATCH_SIZE = "perf.job.bootstrap.batch.size";
   private static final int DEFAULT_PERF_JOB_BOOTSTRAP_BATCH_SIZE = 1;
+
+  private static final String PERF_JOB_INPUT_KAFKA_SYSTEM_NAME = "perf.job.input.kafka.system.name";
+  private static final String DEFAULT_PERF_JOB_INPUT_KAFKA_SYSTEM_NAME = "queuing";
+
+  private static final String PERF_JOB_INPUT_KAFKA_STREAM_ID = "perf.job.input.kafka.stream.id";
+  private static final String DEFAULT_PERF_JOB_INPUT_KAFKA_STREAM_ID = "samza-perf-test-input-p1";
+
+  private static final String PERF_JOB_PERCENTILE_METRICS_COMPUTE_WINDOW_SECONDS =
+      "perf.job.percentile.metrics.compute.window.seconds";
+  private static final long DEFAULT_PERF_JOB_PERCENTILE_METRICS_COMPUTE_WINDOW_SECONDS =
+      Duration.ofMinutes(15).getSeconds();
 
   private MapConfig config;
 
@@ -89,8 +101,12 @@ public class PerfJobConfig extends MapConfig {
     return config.getDouble(PERF_JOB_STORE_GET_RATIO, DEFAULT_PERF_JOB_STORE_GET_RATIO);
   }
 
-  public double getPutRatio() {
-    return config.getDouble(PERF_JOB_STORE_PUT_RATIO, DEFAULT_PERF_JOB_STORE_PUT_RATIO);
+  public double getInsertRatio() {
+    return config.getDouble(PERF_JOB_STORE_INSERT_RATIO, DEFAULT_PERF_JOB_STORE_INSERT_RATIO);
+  }
+
+  public double getUpdateRatio() {
+    return config.getDouble(PERF_JOB_STORE_UPDATE_RATIO, DEFAULT_PERF_JOB_STORE_UPDATE_RATIO);
   }
 
   public double getDeleteRatio() {
@@ -109,10 +125,6 @@ public class PerfJobConfig extends MapConfig {
     return config.getDouble(PERF_JOB_STORE_RANGE_SCAN_RATIO, DEFAULT_PERF_JOB_STORE_RANGE_SCAN_RATIO);
   }
 
-  public int getKeySpaceBuckets() {
-    return config.getInt(PERF_JOB_KEYSPACE_BUCKETS, DEFAULT_PERF_JOB_KEYSPACE_BUCKETS);
-  }
-
   public long getWindowMs() {
     return config.getLong(TASK_WINDOW_MS, DEFAULT_TASK_WINDOW_MS);
   }
@@ -123,5 +135,18 @@ public class PerfJobConfig extends MapConfig {
 
   public int getBootstrapBatchSize() {
     return config.getInt(PERF_JOB_BOOTSTRAP_BATCH_SIZE, DEFAULT_PERF_JOB_BOOTSTRAP_BATCH_SIZE);
+  }
+
+  public String getInputSystemName() {
+    return config.get(PERF_JOB_INPUT_KAFKA_SYSTEM_NAME, DEFAULT_PERF_JOB_INPUT_KAFKA_SYSTEM_NAME);
+  }
+
+  public String getInputStreamId() {
+    return config.get(PERF_JOB_INPUT_KAFKA_STREAM_ID, DEFAULT_PERF_JOB_INPUT_KAFKA_STREAM_ID);
+  }
+
+  public long getPercentileMetricsComputeWindowSeconds() {
+    return config.getLong(PERF_JOB_PERCENTILE_METRICS_COMPUTE_WINDOW_SECONDS,
+        DEFAULT_PERF_JOB_PERCENTILE_METRICS_COMPUTE_WINDOW_SECONDS);
   }
 }
