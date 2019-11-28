@@ -23,7 +23,7 @@ class StoreOperationManager {
   private static final String METRIC_GROUP = PerfTask.class.getName();
   private static final String NUM_RECORDS_BOOTSTRAPPED = "numRecordsBootstrapped";
   private static final String TIME_TO_BOOTSTRAP_MS = "timeToBootstrapMs";
-  private static final List<Double> PERCENTILES = Arrays.asList(50D, 99D);
+  private static final List<Double> PERCENTILES = Arrays.asList(50D, 90D, 95D, 99D);
 
   private long bootstrapCount;
   private Gauge<Long> numRecordsbootstrapped;
