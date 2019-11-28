@@ -45,12 +45,12 @@ class StoreOperationManager {
     numRecordsbootstrapped = taskRegistry.newGauge(METRIC_GROUP, NUM_RECORDS_BOOTSTRAPPED, 0L);
     timeToBootstrapMs = taskRegistry.newGauge(METRIC_GROUP, TIME_TO_BOOTSTRAP_MS, 0L);
     bootstrapCount = 0L;
-    getNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, GET_NS_PCT);
-    putNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, PUT_NS_PCT);
-    deleteNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, DELETE_NS_PCT);
-    allNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, ALL_NS_PCT);
-    rangeNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, RANGE_NS_PCT);
-    snapshotNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, SNAPSHOT_NS_PCT);
+    getNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, GET_NS_PCT, PERCENTILES);
+    putNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, PUT_NS_PCT, PERCENTILES);
+    deleteNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, DELETE_NS_PCT, PERCENTILES);
+    allNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, ALL_NS_PCT, PERCENTILES);
+    rangeNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, RANGE_NS_PCT, PERCENTILES);
+    snapshotNsPct = new SamzaHistogram(containerRegistry, METRIC_GROUP, SNAPSHOT_NS_PCT, PERCENTILES);
   }
 
   void incBootstrappedRecords(long items) {
