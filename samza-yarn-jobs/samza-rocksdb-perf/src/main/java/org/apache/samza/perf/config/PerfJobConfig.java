@@ -56,6 +56,9 @@ public class PerfJobConfig extends MapConfig {
   private static final String PERF_JOB_BOOTSTRAP_BATCH_SIZE = "perf.job.bootstrap.batch.size";
   private static final int DEFAULT_PERF_JOB_BOOTSTRAP_BATCH_SIZE = 1;
 
+  private static final String PERF_JOB_BOOTSTRAP_ENABLED = "perf.job.bootstrap.enabled";
+  private static final boolean DEFAULT_PERF_JOB_BOOTSTRAP_ENABLED = true;
+
   private static final String PERF_JOB_INPUT_KAFKA_SYSTEM_NAME = "perf.job.input.kafka.system.name";
   private static final String DEFAULT_PERF_JOB_INPUT_KAFKA_SYSTEM_NAME = "queuing";
 
@@ -148,5 +151,9 @@ public class PerfJobConfig extends MapConfig {
   public long getPercentileMetricsComputeWindowSeconds() {
     return config.getLong(PERF_JOB_PERCENTILE_METRICS_COMPUTE_WINDOW_SECONDS,
         DEFAULT_PERF_JOB_PERCENTILE_METRICS_COMPUTE_WINDOW_SECONDS);
+  }
+
+  public boolean isBootstrapEnabled() {
+    return config.getBoolean(PERF_JOB_BOOTSTRAP_ENABLED, DEFAULT_PERF_JOB_BOOTSTRAP_ENABLED);
   }
 }

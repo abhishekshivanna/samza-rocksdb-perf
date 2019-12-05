@@ -56,6 +56,7 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
   private StoreOperationManager storeOperationManager;
   private BitSet insertedSet;
   private BitSet deletedSet;
+  private boolean bootstrapEnabled;
 
   @Override
   public void init(Context context) throws Exception {
@@ -80,6 +81,11 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
 
     insertedSet = new BitSet();
     deletedSet = new BitSet();
+    bootstrapEnabled = jobConfig.isBootstrapEnabled();
+    if (!bootstrapEnabled) {
+      itemsBootstrapped = itemsToBootstrapPerPartition;
+      insertedSet.set(0, itemsToBootstrapPerPartition);
+    }
 
     LOG.info("Initialized PerfTask.");
     LOG.info(
