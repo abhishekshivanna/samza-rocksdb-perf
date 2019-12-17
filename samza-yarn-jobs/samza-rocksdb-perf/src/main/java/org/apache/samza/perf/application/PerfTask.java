@@ -239,6 +239,7 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
     storeOperationManager.timedPut(() -> store.put(Integer.toString(key), randomValue));
     deletedSet.clear(key);
     insertedSet.set(key);
+    itemsDeleted--;
   }
 
   private void performUpdate() {
