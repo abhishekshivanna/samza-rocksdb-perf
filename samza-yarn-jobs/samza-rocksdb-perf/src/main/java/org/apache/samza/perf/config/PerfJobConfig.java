@@ -70,6 +70,9 @@ public class PerfJobConfig extends MapConfig {
   private static final long DEFAULT_PERF_JOB_PERCENTILE_METRICS_COMPUTE_WINDOW_SECONDS =
       Duration.ofMinutes(15).getSeconds();
 
+  private static final String PERF_JOB_UPDATE_SEQUENTIAL_KEYS = "perf.job.update.sequential.keys";
+  private static final boolean DEFAULT_PERF_JOB_UPDATE_SEQUENTIAL_KEYS = false;
+
   private MapConfig config;
 
   public PerfJobConfig(MapConfig config) {
@@ -155,5 +158,9 @@ public class PerfJobConfig extends MapConfig {
 
   public boolean isBootstrapEnabled() {
     return config.getBoolean(PERF_JOB_BOOTSTRAP_ENABLED, DEFAULT_PERF_JOB_BOOTSTRAP_ENABLED);
+  }
+
+  public boolean getUpdatesAreSequential() {
+    return config.getBoolean(PERF_JOB_UPDATE_SEQUENTIAL_KEYS, DEFAULT_PERF_JOB_UPDATE_SEQUENTIAL_KEYS);
   }
 }

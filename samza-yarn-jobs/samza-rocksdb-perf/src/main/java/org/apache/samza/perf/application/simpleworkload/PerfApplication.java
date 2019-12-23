@@ -1,4 +1,4 @@
-package org.apache.samza.perf.application;
+package org.apache.samza.perf.application.simpleworkload;
 
 import com.google.common.collect.ImmutableMap;
 import java.util.Map;
