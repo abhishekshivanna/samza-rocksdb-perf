@@ -65,6 +65,7 @@ public class PerfTask implements StreamTask, InitableTask, WindowableTask {
       switch (op) {
         case BOOTSTRAP:
           storeOperationManager.performBootstrap();
+          break;
         case GET:
           storeOperationManager.performGet();
           break;

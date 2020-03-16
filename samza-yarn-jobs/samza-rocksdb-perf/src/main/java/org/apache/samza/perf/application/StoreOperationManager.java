@@ -183,7 +183,7 @@ public class StoreOperationManager {
     if (!updatesAreSequential) {
       return pickKeyInTable();
     }
-    currentSequentialUpdateKey = currentSequentialUpdateKey++ % targetItemsPerPartition;
+    currentSequentialUpdateKey = (currentSequentialUpdateKey + 1)  % targetItemsPerPartition;
     return currentSequentialUpdateKey;
   }
 
